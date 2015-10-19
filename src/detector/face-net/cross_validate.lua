@@ -27,6 +27,9 @@ function cross_validate(epoch, netObject, cv_data)  -- epoch counts number of ti
 	-- keep track of the number of correct predictions
 	local correct_predictions = 0
 	
+	-- keep track of contributions to the logloss score
+	local logloss = 0
+	
 	-- keep track of filenames for positive/negative images that are guessed correctly/incorrectly
 	local confusion_filenames = { true_pos = {}, false_pos = {}, false_neg = {}, true_neg = {} }
 	
@@ -78,6 +81,12 @@ function cross_validate(epoch, netObject, cv_data)  -- epoch counts number of ti
 			correct_predictions = correct_predictions + batch_correct_predictions:sum()
 			
 			
+			-- recoord logloss contribution
+			logloss = logloss + nn.BCECriterion():forward(hypothesis, batch_targets) * ( batch_size / num_cv_examples )
+			  -- ideally need to regularize elementwise as max(min(hyp,1−10−15),10−15)
+			  -- could first take elementwise log and then do max(min(-log(hyp),-log(10−15)),log(10−15)
+			
+			
 			for fine_cv_idx = 1, batch_size do
 				if batch_correct_predictions[fine_cv_idx] == 1 then
 					if pos_or_neg == 'pos' then
@@ -101,6 +110,7 @@ function cross_validate(epoch, netObject, cv_data)  -- epoch counts number of ti
 	-- print confusion matrix
 	print(confusion)
 	--confusion:zero()
+	print('LOGLOSS: ' .. logloss)
 	
 	-- averaged param use?
 	if average then
@@ -109,6 +119,6 @@ function cross_validate(epoch, netObject, cv_data)  -- epoch counts number of ti
 	end
 	
 	local accuracy = correct_predictions / num_cv_examples
-	return accuracy, confusion, confusion_filenames
+	return accuracy, confusion, confusion_filenames, logloss
 	
 end

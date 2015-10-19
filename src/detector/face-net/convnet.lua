@@ -51,7 +51,7 @@ trans_layer['Tanh'] = nn.Tanh
 
 
 
-function convNet:build()  -- first let's get something working, then try to build a flexible net
+function convNet:build(crop_size)  -- first let's get something working, then try to build a flexible net
 	
 	print('==> BUILDING NET')
 
@@ -59,57 +59,117 @@ function convNet:build()  -- first let's get something working, then try to buil
 		self.net:add(nn.Copy('torch.FloatTensor', 'torch.CudaTensor'))
 	end
 	
-	-- convNet structure for 64x64 images
 	
-	--local normkernel = torch.ones(9)
+	-- CONVNET ARCHITECTURES FOR 64x64 IMAGES
+	if crop_size == 64 then
+
+		if self.arch == 'simple' then 
+			self.net:add( nn.SpatialConvolution(3, 16, 5, 5) )  -- 3 x 64 x 64 -> 16 x 60 x 60
+			self.net:add( trans_layer[self.transfer]() )
+			self.net:add( nn.SpatialMaxPooling(2, 2, 2, 2) )  -- 16 x 60 x 60 -> 16 x 30 x 30
 	
-	-- SpatialConfolutionCUDA, SpatialMaxPoolingCUDA
-	self.net:add( nn.SpatialConvolution(3, 16, 5, 5) )  -- 3 x 64 x 64 -> 16 x 60 x 60
-	self.net:add( trans_layer[self.transfer]() )
-	self.net:add( nn.SpatialMaxPooling(2, 2, 2, 2) )  -- 16 x 60 x 60 -> 16 x 30 x 30
-	--self.net:add(nn.SpatialSubtractiveNormalization(16, normkernel))
+			self.net:add( nn.SpatialConvolution(16, 16, 5, 5) )  -- 16 x 30 x 30 -> 16 x 26 x 26
+			self.net:add( trans_layer[self.transfer]() )
+			self.net:add( nn.SpatialMaxPooling(2, 2, 2, 2) )  -- 16 x 26 x 26 -> 16 x 13 x 13
 	
-	self.net:add( nn.SpatialConvolution(16, 16, 5, 5) )  -- 16 x 30 x 30 -> 16 x 26 x 26
-	self.net:add( trans_layer[self.transfer]() )
-	self.net:add( nn.SpatialMaxPooling(2, 2, 2, 2) )  -- 16 x 26 x 26 -> 16 x 13 x 13
-	--self.net:add(nn.SpatialSubtractiveNormalization(16, normkernel))
+			self.net:add( nn.SpatialConvolution(16, 16, 13, 13) )  -- 16 x 13 x 13 -> 16 x 1 x 1
+			self.net:add( nn.SpatialConvolution(16, 8, 1, 1) )  -- 16 x 1 x 1 -> 8 x 1 x 1
+			self.net:add( nn.Dropout(.4) )
+			self.net:add( nn.SpatialConvolution(8, 1, 1, 1) )  -- 8 x 1 x 1 -> 1 x 1 x 1
 	
-	self.net:add( nn.SpatialConvolution(16, 16, 13, 13) )  -- 16 x 13 x 13 -> 16 x 1 x 1
-	self.net:add( nn.SpatialConvolution(16, 8, 1, 1) )  -- 16 x 1 x 1 -> 8 x 1 x 1
-	self.net:add( nn.Dropout(.4) )
-	self.net:add( nn.SpatialConvolution(8, 1, 1, 1) )  -- 8 x 1 x 1 -> 1 x 1 x 1
+			self.net:add( nn. Sigmoid() )  -- prep output for binary cross-entropy criterion (requires output between 0 and 1)
+		end
+
+		if self.arch == 'moreLayers' then
+			self.net:add( nn.SpatialConvolution(3, 16, 3, 3) )  -- 3 x 64 x 64 -> 16 x 62 x 62
+			self.net:add( trans_layer[self.transfer]() )
+			self.net:add( nn.SpatialConvolution(16, 16, 3, 3) )  -- 3 x 62 x 62 -> 16 x 60 x 60
+			self.net:add( trans_layer[self.transfer]() )
+			self.net:add( nn.SpatialMaxPooling(2, 2, 2, 2) )  -- 16 x 60 x 60 -> 16 x 30 x 30
 	
-	self.net:add( nn. Sigmoid() )  -- prep output for binary cross-entropy criterion (requires output between 0 and 1)
+			self.net:add( nn.SpatialConvolution(16, 16, 3, 3) )  -- 16 x 30 x 30 -> 16 x 28 x 28
+			self.net:add( trans_layer[self.transfer]() )
+			self.net:add( nn.SpatialConvolution(16, 16, 3, 3) )  -- 16 x 28 x 28 -> 16 x 26 x 26
+			self.net:add( trans_layer[self.transfer]() )
+			self.net:add( nn.SpatialMaxPooling(2, 2, 2, 2) )  -- 16 x 26 x 26 -> 16 x 13 x 13
+	
+			self.net:add( nn.SpatialConvolution(16, 16, 13, 13) )  -- 16 x 13 x 13 -> 16 x 1 x 1
+			self.net:add( trans_layer[self.transfer]() )
+			self.net:add( nn.SpatialConvolution(16, 8, 1, 1) )  -- 16 x 1 x 1 -> 8 x 1 x 1
+			self.net:add( trans_layer[self.transfer]() )
+			self.net:add( nn.Dropout(.4) )
+			self.net:add( nn.SpatialConvolution(8, 1, 1, 1) )  -- 8 x 1 x 1 -> 1 x 1 x 1
+	
+			self.net:add( nn. Sigmoid() )  -- prep output for binary cross-entropy criterion (requires output between 0 and 1)
+		end
+
+	end
+	
+	
+	-- CONVNET ARCHITECTURES FOR 128x128 IMAGES
+	if crop_size == 128 then
+		
+		if self.arch == 'simple' then
+			self.net:add( nn.SpatialConvolution(3, 32, 5, 5) )  -- 3 x 128 x 128 -> 32 x 124 x 124
+			self.net:add( trans_layer[self.transfer]() )
+			self.net:add( nn.SpatialMaxPooling(2, 2, 2, 2) )  -- 32 x 124 x 124 -> 32 x 62 x 62
+	
+			self.net:add( nn.SpatialConvolution(32, 64, 5, 5) )  -- 32 x 62 x 62 -> 64 x 62 x 62
+			self.net:add( trans_layer[self.transfer]() )
+			self.net:add( nn.SpatialMaxPooling(2, 2, 2, 2) )  -- 64 x 62 x 62 -> 64 x 29 x 29
+	
+			self.net:add( nn.SpatialConvolution(64, 64, 4, 4) )  -- 64 x 29 x 29 -> 64 x 26 x 26
+			self.net:add( trans_layer[self.transfer]() )
+			self.net:add( nn.SpatialMaxPooling(2, 2, 2, 2) )  -- 64 x 26 x 26 -> 64 x 13 x 13
+	
+			self.net:add( nn.SpatialConvolution(64, 8, 13, 13) )  -- 64 x 13 x 13 -> 8 x 1 x 1
+			self.net:add( trans_layer[self.transfer]() )
+			self.net:add( nn.SpatialConvolution(8, 8, 1, 1) )  -- 8 x 1 x 1 -> 8 x 1 x 1
+			self.net:add( trans_layer[self.transfer]() )
+			self.net:add( nn.Dropout(.4) )	
+			self.net:add( nn.SpatialConvolution(8, 1, 1, 1) )  -- 8 x 1 x 1 -> 1 x 1 x 1
+	
+			self.net:add( nn. Sigmoid() )  -- prep output for binary cross-entropy criterion (requires output between 0 and 1)
+		end
+		
+		if self.arch == 'moreLayers' then
+			self.net:add( nn.SpatialConvolution(3, 32, 3, 3) )  -- 3 x 128 x 128 -> 32 x 126 x 126
+			self.net:add( trans_layer[self.transfer]() )
+			self.net:add( nn.SpatialConvolution(32, 32, 3, 3) )  -- 32 x 126 x 126 -> 32 x 124 x 124
+			self.net:add( trans_layer[self.transfer]() )
+			self.net:add( nn.SpatialMaxPooling(2, 2, 2, 2) )  -- 32 x 124 x 124 -> 32 x 62 x 62
+	
+			self.net:add( nn.SpatialConvolution(32, 64, 3, 3) )  -- 32 x 62 x 62 -> 64 x 60 x 60
+			self.net:add( trans_layer[self.transfer]() )
+			self.net:add( nn.SpatialConvolution(64, 64, 3, 3) )  -- 64 x 60 x 60 -> 64 x 58 x 58
+			self.net:add( trans_layer[self.transfer]() )
+			self.net:add( nn.SpatialMaxPooling(2, 2, 2, 2) )  -- 64 x 58 x 58 -> 64 x 29 x 29
+	
+			self.net:add( nn.SpatialConvolution(64, 128, 4, 4) )  -- 64 x 29 x 29 -> 128 x 26 x 26
+			self.net:add( trans_layer[self.transfer]() )
+			self.net:add( nn.SpatialMaxPooling(2, 2, 2, 2) )  -- 128 x 26 x 26 -> 128 x 13 x 13
+	
+			self.net:add( nn.SpatialConvolution(128, 512, 13, 13) )  -- 128 x 13 x 13 -> 512 x 1 x 1
+			self.net:add( trans_layer[self.transfer]() )
+			self.net:add( nn.SpatialConvolution(512, 128, 1, 1) )  -- 512 x 1 x 1 -> 128 x 1 x 1
+			self.net:add( trans_layer[self.transfer]() )
+			self.net:add( nn.Dropout(.4) )
+			self.net:add( nn.SpatialConvolution(128, 128, 1, 1) )  -- 128 x 1 x 1 -> 128 x 1 x 1
+			self.net:add( trans_layer[self.transfer]() )
+			self.net:add( nn.Dropout(.4) )	
+			self.net:add( nn.SpatialConvolution(128, 1, 1, 1) )  -- 128 x 1 x 1 -> 1 x 1 x 1
+	
+			self.net:add( nn. Sigmoid() )  -- prep output for binary cross-entropy criterion (requires output between 0 and 1)
+		end
+		
+	end
+	
 	
 	if self.cuda then
 		self.net:cuda()
 		self.net:add(nn.Copy('torch.CudaTensor', 'torch.FloatTensor'))
 	end
 	
-	
---[[  BELOW IS A CONVNET STRUCTURE FOR 128x128 images
-	
-	self.net:add( nn.SpatialConvolution(3, 32, 5, 5) )  -- 3 x 128 x 128 -> 32 x 124 x 124
-	self.net:add( trans_layer[self.transfer]() )
-	self.net:add( nn.SpatialMaxPooling(2, 2, 2, 2) )  -- 32 x 124 x 124 -> 32 x 62 x 62
-	--self.net:add(nn.SpatialSubtractiveNormalization(dimension, normkernel))
-	--self.net:add(nn.SpatialDropout(p))
-	
-	self.net:add( nn.SpatialConvolution(32, 32, 5, 5) )  -- 32 x 62 x 62 -> 32 x 58 x 58
-	self.net:add( trans_layer[self.transfer]() )
-	self.net:add( nn.SpatialMaxPooling(2, 2, 2, 2) )  -- 32 x 58 x 58 -> 32 x 29 x 29
-	
-	self.net:add( nn.SpatialConvolution(32, 16, 4, 4) )  -- 32 x 29 x 29 -> 16 x 26 x 26
-	self.net:add( trans_layer[self.transfer]() )
-	self.net:add( nn.SpatialMaxPooling(2, 2, 2, 2) )  -- 16 x 26 x 26 -> 16 x 13 x 13
-	
-	self.net:add( nn.SpatialConvolution(16, 16, 13, 13) )  -- 16 x 13 x 13 -> 16 x 1 x 1
-	self.net:add( nn.SpatialConvolution(16, 8, 1, 1) )  -- 16 x 1 x 1 -> 8 x 1 x 1
-	self.net:add( nn.Dropout(.4) )
-	self.net:add( nn.SpatialConvolution(8, 1, 1, 1) )  -- 8 x 1 x 1 -> 1 x 1 x 1
-	
-	self.net:add( nn. Sigmoid() )  -- prep output for binary cross-entropy criterion (requires output between 0 and 1)
---]]
 	
 	self:reset()  -- maybe reset should be called initialize
 

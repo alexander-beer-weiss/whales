@@ -67,25 +67,28 @@ function save_nets:prepNNdirs()
 	if not paths.dir(self.netDatadir) then
 		print('==> creating directory ' .. self.netDatadir)
 		paths.mkdir(self.netDatadir)
-	elseif paths.dir(self.netDatadir .. '/newNets') then
-		if paths.dir(self.netDatadir .. '/oldNets') then
-			print('==> deleting directory ' .. self.netDatadir .. '/oldNets')
-			paths.rmall(self.netDatadir .. '/oldNets', 'yes')
-		end
-		print('==> moving directory ' .. self.netDatadir .. '/newNets'
-		.. ' to ' .. self.netDatadir .. '/oldNets')
-		os.execute('mv ' .. self.netDatadir .. '/newNets ' .. self.netDatadir .. '/oldNets')
+	elseif paths.dir(self.netDatadir .. '/currNets') then
+		print('==> removing directory ' .. self.netDatadir .. '/currNets from previous training session')
+		os.execute('rm -r ' .. self.netDatadir .. '/currNets')
 	end
   
-	print('==> creating directory ' .. self.netDatadir .. '/newNets')
-	paths.mkdir(self.netDatadir .. '/newNets')
+	print('==> creating directory ' .. self.netDatadir .. '/currNets to store temporary data for current network')
+	paths.mkdir(self.netDatadir .. '/currNets')
 end
 
 
 
 function save_nets:saveNN(NN_id, localNetObj)  -- do we really need localNetObj; does self = localNetObj ???
-	self.net=nn.Sequential()
-	torch.save(self.netDatadir .. '/newNets/NN_' .. NN_id .. '.dat', localNetObj)
+	torch.save(self.netDatadir .. '/currNets/NN_' .. NN_id .. '.dat', localNetObj)
+	
+	-- this is probably also saving gradParameters and probably other junk; do we need any of it?
+	-- Can we just save parameters (NOTE, THAT WOULD NOT ALLOW US TO DETERMINE THE ARCHITECTURE OF THE NETWORK IF THE CODE WERE TO CHANGE)
+	-- Maybe we can just save parameters and modules (what is included in modules?)
+end
+
+
+function save_nets:deleteNN(NN_id)
+	os.execute('rm ' .. self.netDatadir .. '/currNets/NN_' .. NN_id .. '.dat')
 end
 
 
@@ -111,7 +114,7 @@ function save_nets:saveBestNet(NN_idx, date_string, confusion, confusion_filenam
 	print('==> creating directory ' .. self.netDatadir .. '/bestNets/' .. date_dir .. '/' .. time_dir)
 	paths.mkdir(self.netDatadir .. '/bestNets/' .. date_dir .. '/' .. time_dir .. time_append)
 	
-	os.execute('cp ' .. self.netDatadir .. '/newNets/NN_' .. NN_idx .. '.dat '
+	os.execute('mv ' .. self.netDatadir .. '/currNets/NN_' .. NN_idx .. '.dat '
 	            .. self.netDatadir .. '/bestNets/' .. date_dir .. '/' .. time_dir .. time_append .. '/NN.dat')
 	
 	if confusion then
@@ -128,8 +131,11 @@ function save_nets:saveBestNet(NN_idx, date_string, confusion, confusion_filenam
 		torch.save(self.netDatadir .. '/bestNets/' .. date_dir .. '/' .. time_dir .. time_append .. '/hyperParams.dat', hyperParams)
 	end
 	
-	os.execute('ln -f -s ' .. self.netDatadir .. '/bestNets/' .. date_dir .. '/' .. time_dir .. time_append .. '/NN.dat' .. ' '
-	            .. self.netDatadir .. '/NN.dat')
+	--os.execute('ln -f -s ' .. self.netDatadir .. '/bestNets/' .. date_dir .. '/' .. time_dir .. time_append .. '/NN.dat' .. ' '
+	--            .. self.netDatadir .. '/NN.dat')  -- the symlink won't load using torch.load (osexecute(readlink ...) for OSX or osexecute(readlink -f ...) for Linux)
+	
+	
+	os.execute('rm -r ' .. self.netDatadir .. '/currNets')
 	
 end
   

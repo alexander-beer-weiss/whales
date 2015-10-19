@@ -36,8 +36,9 @@ function preprocessor:loadFromJPG()
 
 	local cropped_dirs = { pos = self.posDir, neg = self.negDir }
 	
-	--local normkernel = image.gaussian1D(9)  -- would we be better with a different LCN (check dp module)?  or sharpening with image.convolution?
-
+	local num_imgs = 0
+	local mean_sum = 0
+	
 	for pos_or_neg, cropped_dir in pairs(cropped_dirs) do
 		print('Loading images from: ' .. cropped_dir)
 		for file in paths.files(cropped_dir) do
@@ -48,22 +49,54 @@ function preprocessor:loadFromJPG()
 				
 				-- perform normalizations
 				img = image.scale(img, self.height, self.width)
-				img = ( img - torch.mean(img) ) / torch.std(img)
-				--img = nn.SpatialContrastiveNormalization(3, normkernel):forward(img)  -- 3 means RGB; should this be before Z-values normalization?
+				
+				if self.normStyle == 'independent' then
+					img = ( img - torch.mean(img) ) / torch.std(img)
+				else
+					mean_sum = mean_sum + torch.mean(img)
+				end
+				
+				num_imgs = num_imgs + 1
 				
 				-- could also try segmenting first; or LCN first, then segmenting, then Z-normalize
 				
 				table.insert(imgs[pos_or_neg], {['filename'] = file, ['img'] = img})
 
 				-- torch and lua don't always talk nicely
-				-- manual garbage collection prevents memory leak from opened images
+				-- manual garbage collection prevents memory leaks from opened images
 				collectgarbage()
 			end
 		end
 	end
+	
+	if self.normStyle == 'collective' then
+	
+		local mean = mean_sum / num_imgs
+		local variance_sum = 0
+	
+		print('Normalizing images')
+		for pos_or_neg, img_table in pairs(imgs) do
+			for _, example in ipairs(img_table) do
+				example.img = example.img - mean
+				variance_sum = variance_sum + torch.sum( torch.pow(example.img,2) ) / ( self.height * self.width )
+			end
+		end
+	
+		local std = math.sqrt( variance_sum / num_imgs )
 
-	-- return table of positive and negative training examples for whale face detector
-	-- each postive/negative example is a pair: [1] file name; [2] table of warped images for that file
+		for pos_or_neg, img_table in pairs(imgs) do
+			for _, example in ipairs(img_table) do
+				example.img = example.img / std
+			end
+		end	
+	
+		-- return table of positive and negative training examples for whale face detector
+		-- each postive/negative example is a pair: [1] file name; [2] table of warped images for that file
+		imgs.mean = mean
+		imgs.std = std
+		
+	end
+		
 	return imgs
 end
 

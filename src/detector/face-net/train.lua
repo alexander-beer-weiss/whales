@@ -7,6 +7,7 @@ function train(epoch, netObject, training_data, pos_neg_training_order, num_warp
 	-- local time = sys.clock()
 	
 	-- do one epoch
+	print('')
 	print('==> doing epoch on training data:')
 	print('==> epoch # ' .. epoch .. ' [batchSize = ' .. opt.batchSize .. ']')
 	
@@ -25,6 +26,9 @@ function train(epoch, netObject, training_data, pos_neg_training_order, num_warp
 	
 	-- keep track of the number of correct predictions
 	local correct_predictions = 0
+	
+	-- keep track of contributions to the logloss score
+	local logloss = 0
 	
 	-- indices for positive and negative training examples stored in training_data['pos'] and training_data['neg']
 	local target_counter = { pos = 0, neg = 0 };
@@ -63,7 +67,7 @@ function train(epoch, netObject, training_data, pos_neg_training_order, num_warp
 			end
 			
 			-- rotate by 0, 90, 180, 270, ...
-			local rotation_angle = math.floor( target_counter[target] / #training_data[target] ) * math.pi / 2
+			local rotation_angle = (epoch - 1 + math.floor( target_counter[target] / #training_data[target] ) ) * math.pi / 2
 			image.rotate(curr_img, curr_img, rotation_angle)
 			
 			-- after the fourth training epoch, warp curr_img ~50% of the time (hopefully this makes the network more robust)
@@ -107,6 +111,11 @@ function train(epoch, netObject, training_data, pos_neg_training_order, num_warp
 			-- record number of accurate predictions
 			correct_predictions = correct_predictions + batch_correct_predictions:sum()
 			
+			-- recoord logloss contribution
+			logloss = logloss + nn.BCECriterion():forward(hypothesis, batch_targets) * ( batch_size / num_training_examples )
+			  -- ideally need to regularize elementwise as max(min(hyp,1−10−15),10−15)
+			  -- could first take elementwise log and then do max(min(-log(hyp),-log(10−15)),log(10−15)
+			
 			-- return cost and dcost/dX
 			return cost, gradients
 			
@@ -127,8 +136,9 @@ function train(epoch, netObject, training_data, pos_neg_training_order, num_warp
 	
 	print(confusion)  -- print confusion matrix
 	--confusion:zero()  -- reset confusion matrix for next batch
+	print('LOGLOSS: ' .. logloss)
 	
 	local accuracy = correct_predictions / num_training_examples
-	return accuracy
+	return accuracy, logloss
 	
 end
