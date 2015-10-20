@@ -93,7 +93,7 @@ end
 
 
   
-function save_nets:saveBestNet(NN_idx, date_string, confusion, confusion_filenames, hyperParams)
+function save_nets:saveBestNet(NN_idx, date_string, confusion, logloss, confusion_filenames, hyperParams)
 	if not paths.dir(self.netDatadir .. '/bestNets') then
 		print('==> creating directory ' .. self.netDatadir .. '/bestNets')
 		paths.mkdir(self.netDatadir .. '/bestNets')
@@ -119,7 +119,7 @@ function save_nets:saveBestNet(NN_idx, date_string, confusion, confusion_filenam
 	
 	if confusion then
 		local file_stream = io.open(self.netDatadir .. '/bestNets/' .. date_dir .. '/' .. time_dir .. time_append .. '/confusion.txt', 'w')
-		file_stream:write(tostring(confusion), '\n')
+		file_stream:write(tostring(confusion), '\n', 'LOGLOSS: ' .. logloss, '\n')
 		file_stream:close()
 	end
 	

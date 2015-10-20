@@ -95,7 +95,6 @@ for pos_or_neg, examples in pairs(img_data) do
 	local shuffle_tensor = torch.randperm(#examples)
 	for idx = 1, #examples do
 		local shuffled_idx = shuffle_tensor[idx]
-		-- randomly inserting single entry tables { filename = {warped_multiples} } into training/cross-validation sets
 		if idx <= trainFraction * #examples then
 			table.insert(training_data[pos_or_neg], {['filename'] = examples[shuffled_idx].filename, ['img'] = examples[shuffled_idx].img})
 		else
@@ -153,24 +152,27 @@ netSaver = save_nets(opt)
 netSaver:prepNNdirs()
 
 local best_accuracy = 0  -- best accuracy on cross-validation set
+local best_logloss = math.huge
 local best_confusion = nil
 local best_confusion_filenames = nil
 local best_epoch = 1
 local prev_training_accuracy = 0
+local prev_training_logloss = math.huge
 for epoch = 1, opt.maxEpoch do
 	local training_accuracy, training_logloss = train(epoch, myNet, training_data, pos_neg_training_order)
 	local accuracy, confusion, confusion_filenames, logloss = cross_validate(epoch, myNet, cv_data)
 	
 	local previous_best_epoch = best_epoch
-	if best_accuracy < accuracy then
-		best_accuracy = accuracy
+	if best_logloss > logloss then
+		best_logloss = logloss
 		best_confusion = confusion
 		best_confusion_filenames = confusion_filenames
 		best_epoch = epoch
 	end
 	
-	if training_accuracy < prev_training_accuracy then  -- note that this condition cannot be satisfied on the first epoch
-		print('Training accuracy went down! Reducing learning rate.')
+	if training_logloss > prev_training_logloss then  -- note that this condition cannot be satisfied on the first epoch
+		-- maybe consider also check that the increase in logloss is significant (something like: training_logloss/prev_training_logloss > 1.02)
+		print('Training logloss went up! Reducing learning rate.')
 		optimState.learningRate = optimState.learningRate * opt.learningRateScale  -- is this always a good idea??
 		
 		--[[
@@ -191,7 +193,7 @@ for epoch = 1, opt.maxEpoch do
 		--]]
 	end
 	
-	prev_training_accuracy = training_accuracy
+	prev_training_logloss = training_logloss
 
 	netSaver:saveNN(epoch, myNet:getNet())  -- save current state (i.e., parameters) of neural net
 	if epoch ~= 1 then
@@ -206,6 +208,6 @@ for epoch = 1, opt.maxEpoch do
 end
 
 -- copy net with best accuracy to NN.dat
-netSaver:saveBestNet(best_epoch, os.date(), best_confusion, best_confusion_filenames, opt)
+netSaver:saveBestNet(best_epoch, os.date(), best_confusion, best_logloss, best_confusion_filenames, opt)
 
 

@@ -90,15 +90,15 @@ function cross_validate(epoch, netObject, cv_data)  -- epoch counts number of ti
 			for fine_cv_idx = 1, batch_size do
 				if batch_correct_predictions[fine_cv_idx] == 1 then
 					if pos_or_neg == 'pos' then
-						table.insert(confusion_filenames.true_pos, batch_img_filenames[fine_cv_idx])
+						table.insert( confusion_filenames.true_pos, { file = batch_img_filenames[fine_cv_idx] , prob = hypothesis[fine_cv_idx][1] } )
 					else
-						table.insert(confusion_filenames.true_neg, batch_img_filenames[fine_cv_idx])
+						table.insert( confusion_filenames.true_neg, { file = batch_img_filenames[fine_cv_idx] , prob = hypothesis[fine_cv_idx][1] } )
 					end
 				else
 					if pos_or_neg == 'pos' then
-						table.insert(confusion_filenames.false_neg, batch_img_filenames[fine_cv_idx])
+						table.insert( confusion_filenames.false_neg , { file = batch_img_filenames[fine_cv_idx] , prob = hypothesis[fine_cv_idx][1] } )
 					else
-						table.insert(confusion_filenames.false_pos, batch_img_filenames[fine_cv_idx])
+						table.insert( confusion_filenames.false_pos , { file = batch_img_filenames[fine_cv_idx] , prob = hypothesis[fine_cv_idx][1] } )
 					end
 				end
 			end
